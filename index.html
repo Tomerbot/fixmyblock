@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FixMyBlock</title>
+  <meta name="description" content="Report a broken streetlight or a pothole with a photo and a pin. Neighbors confirm it, and the city sees what to fix first.">
+  <meta name="theme-color" content="#34383C">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Overpass: based on Highway Gothic, the road-sign typeface -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet: the free map library. The map tiles come from OpenStreetMap. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- The "spray paint" filter: roughens the edge of every ring on the map -->
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <filter id="spray" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.6"/>
+    </filter>
+  </svg>
+
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="FixMyBlock, back to the map" data-tab-link="map">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="11" fill="none" stroke="var(--paint)" stroke-width="5" filter="url(#spray)"/>
+        </svg>
+        <span>FixMyBlock</span>
+      </a>
+      <button class="icon-btn" type="button" id="aboutBtn" aria-label="About this app">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.2v.1" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+
+    <main class="views">
+      <!-- MAP -->
+      <section class="view view-map is-active" id="view-map" aria-label="Map of reported problems">
+        <div id="map" class="map"></div>
+        <div class="crosshair" id="crosshair" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="none" stroke="var(--paint)" stroke-width="7" stroke-dasharray="10 5" filter="url(#spray)"/><circle cx="32" cy="32" r="3" fill="var(--asphalt)"/></svg>
+        </div>
+        <button class="report-btn" type="button" id="reportBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+          Report a problem
+        </button>
+      </section>
+
+      <!-- FIX FIRST -->
+      <section class="view view-list" id="view-first" aria-labelledby="firstTitle" hidden>
+        <div class="list-head">
+          <h1 id="firstTitle">Fix first</h1>
+          <p class="list-summary" id="firstSummary"></p>
+          <p class="list-help">Ranked by how many neighbors saw it, how dangerous it is, and how long it has been waiting.</p>
+          <button class="text-btn" type="button" id="csvBtn">Download list for the city (CSV)</button>
+        </div>
+        <ol class="rows" id="firstList"></ol>
+      </section>
+
+      <!-- FIXED -->
+      <section class="view view-list" id="view-fixed" aria-labelledby="fixedTitle" hidden>
+        <div class="list-head">
+          <h1 id="fixedTitle">Fixed</h1>
+          <p class="list-summary" id="fixedSummary"></p>
+        </div>
+        <ul class="rows" id="fixedList"></ul>
+      </section>
+    </main>
+
+    <nav class="tabs" aria-label="Views">
+      <button type="button" class="tab is-active" data-tab="map" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z M9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        Map
+      </button>
+      <button type="button" class="tab" data-tab="first">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.6" fill="currentColor"/><circle cx="4" cy="12" r="1.6" fill="currentColor"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/></svg>
+        Fix first
+        <span class="tab-count" id="openCount"></span>
+      </button>
+      <button type="button" class="tab" data-tab="fixed">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Fixed
+      </button>
+    </nav>
+  </div>
+
+  <!-- Bottom sheets. Only one is open at a time. -->
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- REPORT -->
+  <section class="sheet sheet-report" id="reportSheet" role="dialog" aria-modal="false" aria-labelledby="reportTitle" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="reportTitle">Report a problem</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Cancel report">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="reportForm" novalidate>
+      <p class="where-hint" id="whereHint">Move the map so the ring sits on the problem.</p>
+      <button class="text-btn" type="button" id="locateBtn">Use my location</button>
+
+      <fieldset class="field">
+        <legend>What's wrong?</legend>
+        <div class="cats" id="catPicker"></div>
+      </fieldset>
+
+      <div class="field">
+        <span class="field-label">Photo</span>
+        <label class="photo-drop" id="photoDrop">
+          <input type="file" accept="image/*" capture="environment" id="photoInput">
+          <img id="photoPreview" alt="" hidden>
+          <span class="photo-empty" id="photoEmpty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            Take or choose a photo
+          </span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="noteInput">Note <span class="optional">(optional)</span></label>
+        <input type="text" id="noteInput" maxlength="120" placeholder="Next to the bus stop, light is out at night" autocomplete="off">
+      </div>
+
+      <p class="form-error" id="formError" role="alert"></p>
+      <button class="primary-btn" type="submit" id="saveBtn">Add to the map</button>
+    </form>
+  </section>
+
+  <!-- DETAILS -->
+  <section class="sheet sheet-detail" id="detailSheet" role="dialog" aria-modal="true" aria-labelledby="detailTitle" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="detailTitle"></h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div id="detailBody"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="sheet sheet-about" id="aboutSheet" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="aboutTitle">About FixMyBlock</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="prose">
+      <p>See a broken streetlight or a pothole? Report it with a photo and a pin. When neighbors tap <b>I saw it too</b>, the problem climbs the <b>Fix first</b> list, so the city knows what matters most.</p>
+      <p>This is a demo. Reports are saved only in this browser, on this device. The first reports on the map are sample data with drawn pictures, not real photos.</p>
+      <p>Map data &copy; OpenStreetMap contributors.</p>
+      <button class="text-btn danger" type="button" id="resetBtn">Reset demo data</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/categories.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/photo.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "FixMyBlock",
+  "short_name": "FixMyBlock",
+  "description": "Report neighborhood problems with a photo and a pin, and see what to fix first.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F1F2EF",
+  "theme_color": "#34383C",
+  "icons": [
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "assets/icon-maskable.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ]
+}
